@@ -498,7 +498,7 @@ extern const NSString * global_bundleIdentifier;
 // const NSString * global_bundleVersion = @"1.0.2";
 // const NSString * global_bundleIdentifier = @"com.example.SampleApp";
 
-BOOL verifyReceiptAtPath(NSString *receiptPath) {
+BOOL verifyReceiptAtPath(NSString * receiptPath, BOOL checkBundleVersion) {
 	// it turns out, it's a bad idea, to use these two NSBundle methods in your app:
 	//
 	// bundleVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
@@ -512,8 +512,10 @@ BOOL verifyReceiptAtPath(NSString *receiptPath) {
 	NSString *bundleIdentifier = (NSString*)global_bundleIdentifier;
 
 	// avoid making stupid mistakes --> check again
-	NSCAssert([bundleVersion isEqualToString:[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"]],
-              @"whoops! check the hard-coded CFBundleVersion!");
+	if (checkBundleVersion) {
+		NSCAssert([bundleVersion isEqualToString:[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"]],
+                  @"whoops! check the hard-coded CFBundleVersion!");
+    }
 	NSCAssert([bundleIdentifier isEqualToString:[[NSBundle mainBundle] bundleIdentifier]],
               @"whoops! check the hard-coded bundle identifier!");
 	NSDictionary *receipt = dictionaryWithAppStoreReceipt(receiptPath);

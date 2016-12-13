@@ -51,4 +51,4 @@ extern NSString *kReceiptInAppWebOrderLineItemID;
 
 NSDictionary *dictionaryWithAppStoreReceipt(NSString *receiptPath);
 NSArray *obtainInAppPurchases(NSString *receiptPath);
-BOOL verifyReceiptAtPath(NSString *receiptPath);
+BOOL verifyReceiptAtPath(NSString * path, BOOL checkBundleVersion);
