@@ -77,14 +77,70 @@ NSString *kReceiptInAppCancellationDate         = @"CancelDate";
 NSString *kReceiptInAppWebOrderLineItemID       = @"WebItemId";
 
 
-NSData *appleRootCert(void) {
-    // Obtain the Apple Inc. root certificate from http://www.apple.com/certificateauthority/
-    // Download the Apple Inc. Root Certificate ( http://www.apple.com/appleca/AppleIncRootCertificate.cer )
-    // Add the AppleIncRootCertificate.cer to your app's resource bundle.
-
-    NSData *cert = [NSData dataWithContentsOfURL:[[NSBundle mainBundle] URLForResource:@"AppleIncRootCertificate" withExtension:@"cer"]];
+NSData *appleRootCert(void)
+{
+    OSStatus status;
     
-	return cert;
+    SecKeychainRef keychain = nil;
+    status = SecKeychainOpen("/System/Library/Keychains/SystemRootCertificates.keychain", &keychain);
+    if(status){
+        VRCFRelease(keychain);
+        return nil;
+    }
+    
+    CFArrayRef searchList = CFArrayCreate(kCFAllocatorDefault, (const void**)&keychain, 1, &kCFTypeArrayCallBacks);
+    
+    // For some reason we get a malloc reference underflow warning message when garbage collection
+    // is on. Perhaps a bug in SecKeychainOpen where the keychain reference isn't actually retained
+    // in GC?
+#ifndef __OBJC_GC__
+    VRCFRelease(keychain);
+#endif
+    
+    SecKeychainSearchRef searchRef = nil;
+    // Warnings originate from Apple deprecating dynamic linking of Open SSL. You should statically link Open SSL to get rid of warnings.
+    // Or refactor this code to use common crypto. Or just ignore it and hope Open SSL will not change that much in the future
+    status = SecKeychainSearchCreateFromAttributes(searchList, kSecCertificateItemClass, NULL, &searchRef);
+    if(status){
+        VRCFRelease(searchRef);
+        VRCFRelease(searchList);
+        return nil;
+    }
+    
+    SecKeychainItemRef itemRef = nil;
+    NSData * resultData = nil;
+    
+    while(SecKeychainSearchCopyNext(searchRef, &itemRef) == noErr && resultData == nil) {
+        // Grab the name of the certificate
+        SecKeychainAttributeList list;
+        SecKeychainAttribute attributes[1];
+        
+        attributes[0].tag = kSecLabelItemAttr;
+        
+        list.count = 1;
+        list.attr = attributes;
+        
+        SecKeychainItemCopyContent(itemRef, nil, &list, nil, nil);
+        NSData *nameData = [NSData dataWithBytesNoCopy:attributes[0].data length:attributes[0].length freeWhenDone:NO];
+        NSString *name = [[NSString alloc] initWithData:nameData encoding:NSUTF8StringEncoding];
+        
+        if([name isEqualToString:@"Apple Root CA"]) {
+            CSSM_DATA certData;
+            SecCertificateGetData((SecCertificateRef)itemRef, &certData);
+            resultData = [NSData dataWithBytes:certData.Data length:certData.Length];
+        }
+        
+        SecKeychainItemFreeContent(&list, NULL);
+        
+        if (itemRef)
+            VRCFRelease(itemRef);
+        
+    }
+    
+    VRCFRelease(searchList);
+    VRCFRelease(searchRef);
+    
+    return resultData;
 }
 
 // ASN.1 values for In-App Purchase values
@@ -524,6 +580,8 @@ BOOL verifyReceiptAtPath(NSString * receiptPath, BOOL checkBundleVersion) {
 		return NO;
     }
     
+    // no UIDevice on macOS
+	/*
     unsigned char uuidBytes[16];
     NSUUID *vendorUUID = [[UIDevice currentDevice] identifierForVendor];
     [vendorUUID getUUIDBytes:uuidBytes];
@@ -535,10 +593,11 @@ BOOL verifyReceiptAtPath(NSString * receiptPath, BOOL checkBundleVersion) {
     
 	NSMutableData *hash = [NSMutableData dataWithLength:SHA_DIGEST_LENGTH];
 	SHA1([input bytes], [input length], [hash mutableBytes]);
+    */
     
 	if ([bundleIdentifier isEqualToString:[receipt objectForKey:kReceiptBundleIdentifier]] &&
-        [bundleVersion isEqualToString:[receipt objectForKey:kReceiptVersion]] &&
-        [hash isEqualToData:[receipt objectForKey:kReceiptHash]]) {
+        [bundleVersion isEqualToString:[receipt objectForKey:kReceiptVersion]] /*&&
+        [hash isEqualToData:[receipt objectForKey:kReceiptHash]]*/) {
 		return YES;
 	}
     
