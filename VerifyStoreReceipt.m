@@ -341,7 +341,8 @@ NSDictionary *dictionaryWithAppStoreReceipt(NSString *receiptPath) {
 		X509_STORE_free(store);
 	}
     
-	EVP_cleanup();
+	/* EVP_cleanup() removes all ciphers and digests from the table and prevents boost asio SSL initialization */
+	// EVP_cleanup();
     
 	if (verifyReturnValue != 1) {
 		PKCS7_free(p7);
